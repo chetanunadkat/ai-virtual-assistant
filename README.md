@@ -81,7 +81,7 @@ Unstructured Data: Ingests product manuals, product catalogs, and FAQ
 This reference solution implements [different sub-agents using the open-source LangGraph framework and a supervisor agent to orchestrate the entire flow.](./src/agent/) These sub-agents address common customer service tasks for the included sample dataset. They rely on the Llama 3.1 models and NVIDIA NIM microservices for generating responses, converting natural language into SQL queries, and assessing the sentiment of the conversation.
 
 ## Key Components
-* [**Structured Data Retriever**](./src/retrievers/structured_data/): Works in tandem with a Postgres database and PandasAI to fetch relevant data based on user queries.
+* [**Structured Data Retriever**](./src/retrievers/structured_data/): Works in tandem with a Postgres database and Vanna.AI to fetch relevant data based on user queries.
 * [**Unstructured Data Retriever**](./src/retrievers/unstructured_data/): Processes unstructured data (e.g., PDFs, FAQs) by chunking it, creating embeddings using the NeMo Retriever embedding NIM, and storing it in Milvus for fast retrieval.
 * [**Analytics and Admin Operations**](./src/analytics/): To support operational requirements, the blueprint includes reference code and APIs for managing key administrative tasks
    * Storing conversation histories

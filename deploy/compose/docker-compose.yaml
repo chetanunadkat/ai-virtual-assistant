@@ -194,11 +194,15 @@ services:
       APP_LLM_MODELNAME: ${APP_LLM_MODELNAME:-meta/llama-3.1-70b-instruct}
       APP_LLM_MODELENGINE: nvidia-ai-endpoints
       APP_LLM_SERVERURL: ${APP_LLM_SERVERURL:-""}
-      APP_LLM_MODELNAMEPANDASAI: ${APP_LLM_MODELNAME:-meta/llama-3.1-70b-instruct}
+      APP_EMBEDDINGS_MODELNAME: ${APP_EMBEDDINGS_MODELNAME:-nvidia/nv-embedqa-e5-v5}
+      APP_EMBEDDINGS_MODELENGINE: ${APP_EMBEDDINGS_MODELENGINE:-nvidia-ai-endpoints}
+      APP_EMBEDDINGS_SERVERURL: ${APP_EMBEDDINGS_SERVERURL:-""}
       APP_PROMPTS_CHATTEMPLATE: "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Please ensure that your responses are positive in nature."
       APP_PROMPTS_RAGTEMPLATE: "You are a helpful AI assistant named Envie. You will reply to questions only based on the context that you are provided. If something is out of context, you will refrain from replying and politely decline to respond to the user."
       NVIDIA_API_KEY: ${NVIDIA_API_KEY}
       COLLECTION_NAME: ${COLLECTION_NAME:-structured_data}
+      APP_VECTORSTORE_URL: "http://milvus:19530"
+      APP_VECTORSTORE_NAME: "milvus"
       # Database name to store user purchase history, only postgres is supported
       APP_DATABASE_NAME: ${APP_DATABASE_NAME:-"postgres"}
       APP_DATABASE_URL: ${APP_DATABASE_URL:-"postgres:5432"}
@@ -216,6 +220,8 @@ services:
       postgres:
         condition: service_healthy
         required: false
+      milvus:
+        condition: service_healthy
 
 
   # =======================
@@ -333,9 +339,17 @@ services:
     ports:
       - "19530:19530"
       - "9091:9091"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
     depends_on:
-      - "etcd"
-      - "minio"
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     deploy:
       resources:
         reservations:
