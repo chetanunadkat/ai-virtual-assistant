@@ -193,13 +193,12 @@ def update_return(user_id: str, current_product: str, order_id: str) -> str:
 
 class ToProductQAAssistant(BaseModel):
     """
-    Transfers work to a specialized assistant to handle Product QA. 
-    Answers generic queries about products, including their descriptions, specifications, warranties, usage instructions, and troubleshooting issues.
-    Can also address queries based on product manuals, product catalogs, FAQs, policy documents, and general product-related inquiries.
-    Can also answer queries about the NVIDIA Gear Store's product offerings, policies, order management, shipping information, payment methods, returns, and customer service contacts.
+    Transfers work to a specialized assistant to handle Product QA.
+    Answers generic queries about *any* product, including their descriptions, specifications, warranties, usage instructions, and troubleshooting issues.
+    Use this for general product information, frequently asked questions, policy documents, etc., regardless of the specific product or brand.
     """
     query: str = Field(
-        description="The question or issue related to the product. This can involve asking about product specifications, usage guidelines, troubleshooting, warranty details, or other product-related concerns."
+        description="The general question or issue related to a product. This can involve asking about product specifications, usage guidelines, troubleshooting, warranty details, or other product-related concerns."
     )
 
     class Config:

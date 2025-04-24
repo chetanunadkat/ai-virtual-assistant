@@ -21,24 +21,24 @@ import os
 import pandas as pd
 from jinja2 import Template
 from typing import Union
-from src.retrievers.structured_data.vaanaai.utils import NVIDIAEmbeddingsWrapper
-from src.retrievers.structured_data.vaanaai.vaana_llm import NvidiaLLM
+from src.retrievers.structured_data.vaanaai.utils import OpenAIEmbeddingsWrapper
+from src.retrievers.structured_data.vaanaai.vaana_llm import OpenAILLM
 from src.common.utils import get_embedding_model, get_config, get_prompts
 
 logger = logging.getLogger(__name__)
 prompts = get_prompts()
 
-class VannaWrapper(Milvus_VectorStore, NvidiaLLM):
+class VannaWrapper(Milvus_VectorStore, OpenAILLM):
     def __init__(self, config=None):
-        logger.info("Initializing MyVanna with NvidiaLLM and Milvus_VectorStore")
+        logger.info("Initializing MyVanna with OpenAI embeddings and Milvus_VectorStore")
         document_embedder = get_embedding_model()
-        emb_function = NVIDIAEmbeddingsWrapper(document_embedder)
+        emb_function = OpenAIEmbeddingsWrapper(document_embedder)
         settings = get_config()
         if settings.vector_store.name == "milvus":
             milvus_db_url = settings.vector_store.url
         milvus_client = MilvusClient(uri=milvus_db_url)
         Milvus_VectorStore.__init__(self, config={"embedding_function": emb_function, "milvus_client": milvus_client})
-        NvidiaLLM.__init__(self, config=config)
+        OpenAILLM.__init__(self, config=config)
 
     def connect_to_postgres(
         self,

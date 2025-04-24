@@ -40,9 +40,12 @@ except Exception as e:
     logger.warning(f"Optional Langchain module langchain_core not installed.")
 
 try:
-    from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
+    # Remove NVIDIA AI Endpoints imports
+    # from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
+    # Add OpenAI imports
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 except Exception as e:
-    logger.error(f"Optional langchain API Catalog connector langchain_nvidia_ai_endpoints not installed.")
+    logger.error(f"Optional API connector not installed.")
 
 try:
     from langchain_community.vectorstores import PGVector
@@ -144,7 +147,8 @@ def create_vectorstore_langchain(document_embedder, collection_name: str = "") -
             document_embedder,
             connection_args={"host": url.hostname, "port": url.port},
             collection_name=collection_name,
-            index_params={"index_type": "GPU_IVF_FLAT", "metric_type": "L2", "nlist": config.vector_store.nlist},
+            # Use CPU-based index type instead of GPU for Mac compatibility
+            index_params={"index_type": "IVF_FLAT", "metric_type": "L2", "nlist": config.vector_store.nlist},
             search_params={"nprobe": config.vector_store.nprobe},
             auto_id = True
         )
@@ -170,26 +174,26 @@ def get_llm(**kwargs) -> LLM | SimpleChatModel:
     """Create the LLM connection."""
     settings = get_config()
 
-    logger.info(f"Using {settings.llm.model_engine} as model engine for llm. Model name: {settings.llm.model_name}")
-    if settings.llm.model_engine == "nvidia-ai-endpoints":
-        unused_params = [key for key in kwargs.keys() if key not in ['temperature', 'top_p', 'max_tokens']]
-        if unused_params:
-            logger.warning(f"The following parameters from kwargs are not supported: {unused_params} for {settings.llm.model_engine}")
-        if settings.llm.server_url:
-            logger.info(f"Using llm model {settings.llm.model_name} hosted at {settings.llm.server_url}")
-            return ChatNVIDIA(base_url=f"http://{settings.llm.server_url}/v1",
-                            model=settings.llm.model_name,
-                            temperature = kwargs.get('temperature', None),
-                            top_p = kwargs.get('top_p', None),
-                            max_tokens = kwargs.get('max_tokens', None))
-        else:
-            logger.info(f"Using llm model {settings.llm.model_name} from api catalog")
-            return ChatNVIDIA(model=settings.llm.model_name,
-                            temperature = kwargs.get('temperature', None),
-                            top_p = kwargs.get('top_p', None),
-                            max_tokens = kwargs.get('max_tokens', None))
-    else:
-        raise RuntimeError("Unable to find any supported Large Language Model server. Supported engine name is nvidia-ai-endpoints.")
+    # Update to use OpenAI models instead of NVIDIA NIM
+    logger.info(f"Using OpenAI as model engine for llm. Model name: {settings.llm.model_name}")
+    
+    # Default to gpt-4 if no model specified
+    model_name = "gpt-4o-mini"
+    
+    # Check for OpenAI API key
+    if not os.environ.get("OPENAI_API_KEY"):
+        logger.warning("OPENAI_API_KEY environment variable not set")
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+    logger.info(f"OPENAI_API_KEY: {OPENAI_API_KEY}")
+    logger.info(f"Initializing ChatOpenAI with model: {model_name}")
+    
+    return ChatOpenAI(
+        model=model_name,
+        temperature=kwargs.get('temperature', 0),
+        top_p=kwargs.get('top_p', 0.7),
+        max_tokens=kwargs.get('max_tokens', 1024),
+        api_key=OPENAI_API_KEY
+    )
 
 
 @lru_cache
@@ -197,7 +201,7 @@ def get_embedding_model() -> Embeddings:
     """Create the embedding model."""
     settings = get_config()
 
-    logger.info(f"Using {settings.embeddings.model_engine} as model engine and {settings.embeddings.model_name} and model for embeddings")
+    # Use HuggingFace embeddings if specified
     if settings.embeddings.model_engine == "huggingface":
         model_kwargs = {"device": "cpu"}
         if torch.cuda.is_available():
@@ -211,15 +215,17 @@ def get_embedding_model() -> Embeddings:
         )
         # Load in a specific embedding model
         return hf_embeddings
-    elif settings.embeddings.model_engine == "nvidia-ai-endpoints":
-        if settings.embeddings.server_url:
-            logger.info(f"Using embedding model {settings.embeddings.model_name} hosted at {settings.embeddings.server_url}")
-            return NVIDIAEmbeddings(base_url=f"http://{settings.embeddings.server_url}/v1", model=settings.embeddings.model_name, truncate="END")
-        else:
-            logger.info(f"Using embedding model {settings.embeddings.model_name} hosted at api catalog")
-            return NVIDIAEmbeddings(model=settings.embeddings.model_name, truncate="END")
-    else:
-        raise RuntimeError("Unable to find any supported embedding model. Supported engine is huggingface and nvidia-ai-endpoints.")
+    else :
+        model_name = 'text-embedding-3-small'
+        logger.info(f"Using OpenAI embedding model {model_name}")
+
+        print("blahblah")
+        return OpenAIEmbeddings(
+            model=model_name,
+            api_key=os.environ["OPENAI_API_KEY"]
+        )
+
+
 
 @lru_cache
 def get_ranking_model() -> BaseDocumentCompressor:
@@ -228,23 +234,8 @@ def get_ranking_model() -> BaseDocumentCompressor:
     Returns:
         BaseDocumentCompressor: Base class for document compressors.
     """
-
-    settings = get_config()
-
-    try:
-        if settings.ranking.model_engine == "nvidia-ai-endpoints":
-            if settings.ranking.server_url:
-                logger.info(f"Using ranking model hosted at {settings.ranking.server_url}")
-                return NVIDIARerank(
-                    base_url=f"http://{settings.ranking.server_url}/v1", top_n=settings.retriever.top_k, truncate="END"
-                )
-            elif settings.ranking.model_name:
-                logger.info(f"Using ranking model {settings.ranking.model_name} hosted at api catalog")
-                return NVIDIARerank(model=settings.ranking.model_name, top_n=settings.retriever.top_k, truncate="END")
-        else:
-            logger.warning("Unable to find any supported ranking model. Supported engine is nvidia-ai-endpoints.")
-    except Exception as e:
-        logger.error(f"An error occurred while initializing ranking_model: {e}")
+    # Comment out the reranking for now
+    logger.info("Reranking is currently disabled")
     return None
 
 

@@ -8,3 +8,4 @@ redis==5.0.8
 psycopg2-binary==2.9.9
 SQLAlchemy==2.0.31
 bleach==6.1.0
+tzdata

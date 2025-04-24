@@ -108,8 +108,9 @@ class UnstructuredRetriever(BaseExample):
                 raise ValueError()
 
             docs = []
-            ranker = get_ranking_model()
-            top_k = vector_db_top_k if ranker else num_docs
+            # Reranking is disabled in this implementation
+            ranker = None  # get_ranking_model() - commented out as reranking is disabled
+            top_k = num_docs  # No reranking, so just use the requested number of docs
             logger.info(f"Setting top k as: {top_k}.")
             retriever = vs.as_retriever(search_kwargs={"k": top_k}) # milvus does not support similarily threshold
 
@@ -134,26 +135,27 @@ class UnstructuredRetriever(BaseExample):
                 if content.replace('"', "'") == "''" or len(content) == 0:
                     return []
 
-            if ranker:
-                logger.info(f"Narrowing the collection from {top_k} results and further narrowing it to {num_docs} with the reranker for rag chain.")
-                # Update number of document to be retriever by ranker
-                ranker.top_n = num_docs
-
-                context_reranker = RunnableAssign({"context": lambda input: ranker.compress_documents(query=input['question'], documents=input['context'])})
-
-                retriever = {"context": retriever, "question": RunnablePassthrough()} | context_reranker
-                docs = retriever.invoke(content)
-                resp = []
-                for doc in docs.get("context"):
-                    resp.append(
-                            {
-                                "source": os.path.basename(doc.metadata.get("source", "")),
-                                "content": doc.page_content,
-                                "score": doc.metadata.get("relevance_score", 0)
-                            }
-                    )
-                return resp
-            else:
+            # Reranking is commented out since we're not implementing it with OpenAI
+            # if ranker:
+            #    logger.info(f"Narrowing the collection from {top_k} results and further narrowing it to {num_docs} with the reranker for rag chain.")
+            #    # Update number of document to be retriever by ranker
+            #    ranker.top_n = num_docs
+            #
+            #    context_reranker = RunnableAssign({"context": lambda input: ranker.compress_documents(query=input['question'], documents=input['context'])})
+            #
+            #    retriever = {"context": retriever, "question": RunnablePassthrough()} | context_reranker
+            #    docs = retriever.invoke(content)
+            #    resp = []
+            #    for doc in docs.get("context"):
+            #        resp.append(
+            #                {
+            #                    "source": os.path.basename(doc.metadata.get("source", "")),
+            #                    "content": doc.page_content,
+            #                    "score": doc.metadata.get("relevance_score", 0)
+            #                }
+            #        )
+            #    return resp
+            # else:
                 docs = retriever.invoke(content)
                 resp = []
                 for doc in docs:

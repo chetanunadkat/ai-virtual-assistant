@@ -387,9 +387,15 @@ builder.add_edge("ask_clarification", END)
 
 # Primary assistant
 builder.add_node("primary_assistant", Assistant(primary_assistant_prompt, primary_assistant_tools))
+
+# Add entry node for other_talk, similar to the other specialized assistants
+builder.add_node(
+    "enter_other_talk", create_entry_node("General Assistant")
+)
 builder.add_node(
     "other_talk", handle_other_talk
 )
+builder.add_edge("enter_other_talk", "other_talk")
 
 #  Add "primary_assistant_tools", if necessary
 def route_primary_assistant(
@@ -398,7 +404,7 @@ def route_primary_assistant(
     "enter_product_qa",
     "enter_order_status",
     "enter_return_processing",
-    "other_talk",
+    "enter_other_talk",
     "__end__",
 ]:
     route = tools_condition(state)
@@ -413,7 +419,7 @@ def route_primary_assistant(
         elif tool_calls[0]["name"] == ToReturnProcessing.__name__:
             return "enter_return_processing"
         elif tool_calls[0]["name"] == HandleOtherTalk.__name__:
-            return "other_talk"
+            return "enter_other_talk"
     raise ValueError("Invalid route")
 
 builder.add_edge("other_talk", END)
@@ -427,7 +433,7 @@ builder.add_conditional_edges(
         "enter_product_qa": "enter_product_qa",
         "enter_order_status": "enter_order_status",
         "enter_return_processing": "enter_return_processing",
-        "other_talk":"other_talk",
+        "enter_other_talk": "enter_other_talk",
         END: END,
     },
 )

@@ -16,9 +16,9 @@ services:
     command: --port 8081 --host 0.0.0.0 --workers 1 --loop asyncio
     environment:
       EXAMPLE_PATH: './src/agent'
-      APP_LLM_MODELNAME: ${APP_LLM_MODELNAME:-"meta/llama-3.3-70b-instruct"}
-      APP_LLM_MODELENGINE: nvidia-ai-endpoints
-      APP_LLM_SERVERURL: ${APP_LLM_SERVERURL:-""}
+      # Using OpenAI models instead of NVIDIA NIM
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-"sk-your-api-key"}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-"gpt-4"}
       # Cache name to store user conversation
       # supported type inmemory, redis
       APP_CACHE_NAME: ${APP_CACHE_NAME:-"redis"}
@@ -41,15 +41,16 @@ services:
       CUSTOMER_DATA_DB: ${CUSTOMER_DATA_DB:-customer_data}
       CANONICAL_RAG_URL: http://unstructured-retriever:8081
       STRUCTURED_RAG_URI: http://structured-retriever:8081
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
       GRAPH_RECURSION_LIMIT: 20
-      GRAPH_TIMEOUT_IN_SEC: 20 # with meta/llama-3.3-70b-instruct
+      GRAPH_TIMEOUT_IN_SEC: 60
       RETURN_WINDOW_CURRENT_DATE: '2024-10-23' # Leave it empty to get the current date
       RETURN_WINDOW_THRESHOLD_DAYS: 30
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
       # Set the default expiration time (TTL) for Redis keys (in seconds)
       REDIS_SESSION_EXPIRY: 12 # in hours
+      # Set timezone
+      TZ: ${TZ:-UTC}
     ports:
     - "8081:8081"
     expose:
@@ -76,7 +77,7 @@ services:
     environment:
       AGENT_SERVER_URL: ${AGENT_SERVER_URL:-http://agent-chain-server:8081}
       ANALYTICS_SERVER_URL: ${ANALYTICS_SERVER_URL:-http://analytics-server:8081}
-      REQUEST_TIMEOUT: 320 # with meta/llama-3.3-70b-instruct
+      REQUEST_TIMEOUT: 320
     restart: unless-stopped  # Optional: Automatically restart the container unless it is stopped
     depends_on:
     - agent-chain-server
@@ -105,9 +106,9 @@ services:
     command: --port 8081 --host 0.0.0.0 --workers 1
     environment:
       EXAMPLE_PATH: './src/analytics'
-      APP_LLM_MODELNAME: ${APP_LLM_MODELNAME:-"meta/llama-3.3-70b-instruct"}
-      APP_LLM_MODELENGINE: nvidia-ai-endpoints
-      APP_LLM_SERVERURL: ${APP_LLM_SERVERURL:-""}
+      # Using OpenAI models instead of NVIDIA NIM
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-"sk-your-api-key"}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-"gpt-4o"}
       # Database name to store user conversation/summary
       # supported type inmemory, redis
       APP_DATABASE_NAME: ${APP_DATABASE_NAME:-"postgres"}
@@ -120,9 +121,10 @@ services:
       CUSTOMER_DATA_DB: ${CUSTOMER_DATA_DB:-customer_data}
       # Store summary/sentiment in database
       PERSIST_DATA: ${PERSIST_DATA:-true}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
+      # Set timezone
+      TZ: ${TZ:-UTC}
     ports:
     - "8082:8081"
     expose:
@@ -156,33 +158,19 @@ services:
       APP_VECTORSTORE_URL: "http://milvus:19530"
       # Type of vectordb used to store embedding supported type milvus, pgvector
       APP_VECTORSTORE_NAME: "milvus"
-      # url on which llm model is hosted. If "", Nvidia hosted API is used
-      APP_LLM_MODELNAME: ${APP_LLM_MODELNAME:-"meta/llama-3.3-70b-instruct"}
-      # embedding model engine used for inference, supported type nvidia-ai-endpoints, huggingface
-      APP_LLM_MODELENGINE: nvidia-ai-endpoints
-      # url on which llm model is hosted. If "", Nvidia hosted API is used
-      APP_LLM_SERVERURL: ${APP_LLM_SERVERURL:-""}
-      APP_EMBEDDINGS_MODELNAME: ${APP_EMBEDDINGS_MODELNAME:-nvidia/llama-3.2-nv-embedqa-1b-v2}
-      # embedding model engine used for inference, supported type nvidia-ai-endpoints
-      APP_EMBEDDINGS_MODELENGINE: ${APP_EMBEDDINGS_MODELENGINE:-nvidia-ai-endpoints}
-      # url on which embedding model is hosted. If "", Nvidia hosted API is used
-      APP_EMBEDDINGS_SERVERURL: ${APP_EMBEDDINGS_SERVERURL:-""}
-      APP_RANKING_MODELNAME: ${APP_RANKING_MODELNAME:-"nvidia/llama-3.2-nv-rerankqa-1b-v2"} # Leave it blank to avoid using ranking
-      # ranking engine used for inference, supported type nvidia-ai-endpoints
-      APP_RANKING_MODELENGINE: ${APP_RANKING_MODELENGINE:-nvidia-ai-endpoints}
-      # url on which re-ranking model is hosted. If "", Nvidia hosted API is used
-      APP_RANKING_SERVERURL: ${APP_RANKING_SERVERURL:-""}
+      # OpenAI configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-"sk-your-api-key"}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-"gpt-4o"}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-"text-embedding-3-small"}
       # text splitter model name, it's fetched from huggingface
       APP_TEXTSPLITTER_MODELNAME: Snowflake/snowflake-arctic-embed-l
       APP_TEXTSPLITTER_CHUNKSIZE: 506
       APP_TEXTSPLITTER_CHUNKOVERLAP: 200
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
       # vectorstore collection name to store embeddings
       COLLECTION_NAME: ${COLLECTION_NAME:-unstructured_data}
       APP_RETRIEVER_TOPK: 4
       APP_RETRIEVER_SCORETHRESHOLD: 0.25
-      # Number of documents to be retrieved from retriever when reranking model is enabled
-      # This will be then send to re ranker to get `APP_RETRIEVER_TOPK` documents
+      # Number of documents to be retrieved from retriever
       VECTOR_DB_TOPK: 20
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
@@ -207,15 +195,12 @@ services:
     command: --port 8081 --host 0.0.0.0 --workers 1
     environment:
       EXAMPLE_PATH: 'src/retrievers/structured_data'
-      APP_LLM_MODELNAME: ${APP_LLM_MODELNAME:-meta/llama-3.3-70b-instruct}
-      APP_LLM_MODELENGINE: nvidia-ai-endpoints
-      APP_LLM_SERVERURL: ${APP_LLM_SERVERURL:-""}
-      APP_EMBEDDINGS_MODELNAME: ${APP_EMBEDDINGS_MODELNAME:-nvidia/llama-3.2-nv-embedqa-1b-v2}
-      APP_EMBEDDINGS_MODELENGINE: ${APP_EMBEDDINGS_MODELENGINE:-nvidia-ai-endpoints}
-      APP_EMBEDDINGS_SERVERURL: ${APP_EMBEDDINGS_SERVERURL:-""}
+      # OpenAI configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-"sk-your-api-key"}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-"gpt-4o"}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-"text-embedding-3-small"}
       APP_PROMPTS_CHATTEMPLATE: "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Please ensure that your responses are positive in nature."
       APP_PROMPTS_RAGTEMPLATE: "You are a helpful AI assistant named Envie. You will reply to questions only based on the context that you are provided. If something is out of context, you will refrain from replying and politely decline to respond to the user."
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
       COLLECTION_NAME: ${COLLECTION_NAME:-structured_data}
       APP_VECTORSTORE_URL: "http://milvus:19530"
       APP_VECTORSTORE_NAME: "milvus"
@@ -227,6 +212,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-customer_data}
       CSV_NAME: PdM_machines
       LOGLEVEL: ${LOGLEVEL:-INFO}
+      # Set timezone
+      TZ: ${TZ:-UTC}
     ports:
     - "8087:8081"
     expose:
@@ -238,9 +225,6 @@ services:
             required: false
       milvus:
         condition: service_healthy
-      nemollm-embedding:
-        condition: service_healthy
-        required: false
 
   # =======================
   # Database Services - User purchase history and permanently store conversation details
@@ -252,6 +236,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-customer_data}
+      TZ: ${TZ:-UTC}
     command:
       - "postgres"
       - "-c"
@@ -347,12 +332,11 @@ services:
 
   milvus:
     container_name: milvus-standalone
-    image: milvusdb/milvus:v2.4.15-gpu
+    image: milvusdb/milvus:v2.4.15
     command: ["milvus", "run", "standalone"]
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9010
-      KNOWHERE_GPU_MEM_POOL_SIZE: 2048;4096
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
     ports:
@@ -369,13 +353,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: ["gpu"]
-              device_ids: ['${VECTORSTORE_GPU_DEVICE_ID:-0}']
 
 
 networks:
