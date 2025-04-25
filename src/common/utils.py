@@ -168,7 +168,6 @@ def get_vectorstore(vectorstore, document_embedder) -> VectorStore:
         return create_vectorstore_langchain(document_embedder)
     return vectorstore
 
-@utils_cache
 @lru_cache()
 def get_llm(**kwargs) -> LLM | SimpleChatModel:
     """Create the LLM connection."""
@@ -177,17 +176,18 @@ def get_llm(**kwargs) -> LLM | SimpleChatModel:
     # Update to use OpenAI models instead of NVIDIA NIM
     logger.info(f"Using OpenAI as model engine for llm. Model name: {settings.llm.model_name}")
     
-    # Default to gpt-4 if no model specified
+    # Default to gpt-4o-mini if no model specified
     model_name = "gpt-4o-mini"
     
     # Check for OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
         logger.warning("OPENAI_API_KEY environment variable not set")
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-    logger.info(f"OPENAI_API_KEY: {OPENAI_API_KEY}")
-    logger.info(f"Initializing ChatOpenAI with model: {model_name}")
     
-    return ChatOpenAI(
+    logger.info(f"Initializing DirectOpenAIFix with model: {model_name}")
+    
+    # Use our brute-force fix instead of other wrappers
+    return DirectOpenAIFix(
         model=model_name,
         temperature=kwargs.get('temperature', 0),
         top_p=kwargs.get('top_p', 0.7),
@@ -351,3 +351,98 @@ def _combine_dicts(dict_a, dict_b):
             combined_dict[key] = value_b
 
     return combined_dict
+
+# Create a simple direct wrapper for OpenAI calls
+class DirectOpenAIFix(ChatOpenAI):
+    """A direct wrapper that formats messages right before sending to OpenAI API."""
+    
+    def _generate(self, messages, stop=None, **kwargs):
+        """
+        Directly intercept and fix messages before sending to OpenAI API.
+        This is a brute-force approach to ensure we never hit the OpenAI error.
+        """
+        # Print original messages for debugging
+        logger.info(f"ORIGINAL MESSAGES: {messages}")
+        
+        # Create a completely new list of messages
+        fixed_messages = []
+        tool_calls_seen = {}  # Track tool calls by ID
+        tool_responses_seen = {}  # Track tool responses by ID
+        
+        # First pass - collect all tool calls and responses
+        for msg in messages:
+            # Track tool calls
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if isinstance(tc, dict) and 'id' in tc:
+                        tool_calls_seen[tc['id']] = True
+            
+            # Track tool responses
+            if hasattr(msg, 'tool_call_id') and msg.tool_call_id:
+                tool_responses_seen[msg.tool_call_id] = True
+        
+        # Second pass - build the fixed sequence
+        for msg in messages:
+            # Add the original message
+            fixed_messages.append(msg)
+            
+            # If this is a message with tool calls, ensure responses follow immediately
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if isinstance(tc, dict) and 'id' in tc:
+                        tc_id = tc['id']
+                        # If there's no response for this tool call, add one
+                        if tc_id not in tool_responses_seen:
+                            from langchain_core.messages import ToolMessage
+                            fixed_messages.append(
+                                ToolMessage(
+                                    content="No result available for this tool call",
+                                    tool_call_id=tc_id
+                                )
+                            )
+                            # Mark as seen so we don't add duplicates
+                            tool_responses_seen[tc_id] = True
+        
+        # Find all tool calls without responses
+        missing_responses = [tc_id for tc_id in tool_calls_seen if tc_id not in tool_responses_seen]
+        if missing_responses:
+            logger.warning(f"Found {len(missing_responses)} tool calls without responses, adding them now")
+            for tc_id in missing_responses:
+                from langchain_core.messages import ToolMessage
+                fixed_messages.append(
+                    ToolMessage(
+                        content="No result available for this tool call",
+                        tool_call_id=tc_id
+                    )
+                )
+        
+        logger.info(f"FIXED MESSAGES: {fixed_messages}")
+        
+        try:
+            # Call the original method with fixed messages
+            return super()._generate(fixed_messages, stop=stop, **kwargs)
+        except Exception as e:
+            # If we still get an error, log it and try a last-ditch fix
+            logger.error(f"Error after initial fix: {e}")
+            
+            # Extract the tool_call_id from the error if possible
+            import re
+            error_msg = str(e)
+            tool_call_matches = re.findall(r"call_[a-zA-Z0-9]+", error_msg)
+            
+            if tool_call_matches:
+                for tc_id in tool_call_matches:
+                    logger.warning(f"Adding emergency fix for tool call ID: {tc_id}")
+                    from langchain_core.messages import ToolMessage
+                    fixed_messages.append(
+                        ToolMessage(
+                            content="Emergency fix for missing tool response",
+                            tool_call_id=tc_id
+                        )
+                    )
+                
+                # Try one more time with the emergency fix
+                return super()._generate(fixed_messages, stop=stop, **kwargs)
+            else:
+                # If we can't fix it, re-raise the original error
+                raise
